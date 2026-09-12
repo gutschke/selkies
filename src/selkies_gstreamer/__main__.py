@@ -540,7 +540,7 @@ def main():
     async def on_signalling_error(e):
        if isinstance(e, WebRTCSignallingErrorNoPeer):
            # Waiting for peer to connect, retry in 2 seconds.
-           time.sleep(2)
+           await asyncio.sleep(2)
            await signalling.setup_call()
        else:
            logger.error("signalling error: %s", str(e))
@@ -548,7 +548,7 @@ def main():
     async def on_audio_signalling_error(e):
        if isinstance(e, WebRTCSignallingErrorNoPeer):
            # Waiting for peer to connect, retry in 2 seconds.
-           time.sleep(2)
+           await asyncio.sleep(2)
            await audio_signalling.setup_call()
        else:
            logger.error("signalling error: %s", str(e))
