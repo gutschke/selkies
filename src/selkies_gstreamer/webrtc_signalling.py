@@ -164,43 +164,53 @@ class WebRTCSignalling:
         on_error(WebRTCSignallingErrorNoPeer): fired when setup_call() fails and peer not found message is received.
         on_error(WebRTCSignallingError): fired when message parsing fails or unexpected message is received.
 
+
+        Returns when the connection ends, however it ends. The caller
+        reconnects; a closed socket is not a fault this coroutine can fix.
         """
-        async for message in self.conn:
-            if message == 'HELLO':
-                logger.info("connected")
-                await self.on_connect()
-            elif message.startswith('SESSION_OK'):
-                toks = message.split()
-                meta = {}
-                if len(toks) > 1:
-                    meta = json.loads(base64.b64decode(toks[1]))
-                logger.info("started session with peer: %s, meta: %s", self.peer_id, json.dumps(meta))
-                self.on_session(self.peer_id, (meta))
-            elif message.startswith('ERROR'):
-                if message == "ERROR peer '%s' not found" % self.peer_id:
-                    await self.on_error(WebRTCSignallingErrorNoPeer("'%s' not found" % self.peer_id))
-                else:
-                    await self.on_error(WebRTCSignallingError("unhandled signalling message: %s" % message))
-            else:
-                # Attempt to parse JSON SDP or ICE message
-                data = None
-                try:
-                    data = json.loads(message)
-                except Exception as e:
-                    if isinstance(e, json.decoder.JSONDecodeError):
-                        await self.on_error(WebRTCSignallingError("error parsing message as JSON: %s" % message))
+        try:
+            async for message in self.conn:
+                if message == 'HELLO':
+                    logger.info("connected")
+                    await self.on_connect()
+                elif message.startswith('SESSION_OK'):
+                    toks = message.split()
+                    meta = {}
+                    if len(toks) > 1:
+                        meta = json.loads(base64.b64decode(toks[1]))
+                    logger.info("started session with peer: %s, meta: %s", self.peer_id, json.dumps(meta))
+                    self.on_session(self.peer_id, (meta))
+                elif message.startswith('ERROR'):
+                    if message == "ERROR peer '%s' not found" % self.peer_id:
+                        await self.on_error(WebRTCSignallingErrorNoPeer("'%s' not found" % self.peer_id))
                     else:
-                        await self.on_error(WebRTCSignallingError("failed to prase message: %s" % message))
-                    continue
-                if data.get("sdp", None):
-                    logger.info("received SDP")
-                    logger.debug("SDP:\n%s" % data["sdp"])
-                    self.on_sdp(data['sdp'].get('type'),
-                                data['sdp'].get('sdp'))
-                elif data.get("ice", None):
-                    logger.info("received ICE")
-                    logger.debug("ICE:\n%s" % data.get("ice"))
-                    self.on_ice(data['ice'].get('sdpMLineIndex'),
-                                data['ice'].get('candidate'))
+                        await self.on_error(WebRTCSignallingError("unhandled signalling message: %s" % message))
                 else:
-                    await self.on_error(WebRTCSignallingError("unhandled JSON message: %s", json.dumps(data)))
+                    # Attempt to parse JSON SDP or ICE message
+                    data = None
+                    try:
+                        data = json.loads(message)
+                    except Exception as e:
+                        if isinstance(e, json.decoder.JSONDecodeError):
+                            await self.on_error(WebRTCSignallingError("error parsing message as JSON: %s" % message))
+                        else:
+                            await self.on_error(WebRTCSignallingError("failed to prase message: %s" % message))
+                        continue
+                    if data.get("sdp", None):
+                        logger.info("received SDP")
+                        logger.debug("SDP:\n%s" % data["sdp"])
+                        self.on_sdp(data['sdp'].get('type'),
+                                    data['sdp'].get('sdp'))
+                    elif data.get("ice", None):
+                        logger.info("received ICE")
+                        logger.debug("ICE:\n%s" % data.get("ice"))
+                        self.on_ice(data['ice'].get('sdpMLineIndex'),
+                                    data['ice'].get('candidate'))
+                    else:
+                        await self.on_error(WebRTCSignallingError("unhandled JSON message: %s", json.dumps(data)))
+        except websockets.ConnectionClosed as e:
+            if isinstance(e, websockets.ConnectionClosedOK):
+                logger.info("signalling connection closed: %s", e)
+            else:
+                logger.warning(
+                    "signalling connection closed abnormally: %s", e)
