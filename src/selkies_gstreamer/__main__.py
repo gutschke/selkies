@@ -301,6 +301,9 @@ def set_json_app_argument(config_path, key, value):
     return True
 
 def main():
+    # Read by the finally block at the end, which runs even if setup below
+    # raises, so it has to be bound before anything can fail.
+    status = 0
     parser = argparse.ArgumentParser()
     parser.add_argument('--json_config',
                         default=os.environ.get(
@@ -909,7 +912,7 @@ def main():
     except Exception as e:
         logger.error("Caught exception: %s" % e)
         traceback.print_exc()
-        sys.exit(1)
+        status = 1
     finally:
         app.stop_pipeline()
         audio_app.stop_pipeline()
@@ -923,7 +926,7 @@ def main():
         rtc_file_mon.stop()
         system_mon.stop()
         loop.run_until_complete(server.stop())
-        sys.exit(0)
+        sys.exit(status)
     # [END main_start]
 
 if __name__ == '__main__':
